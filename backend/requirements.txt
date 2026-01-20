@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-dotenv
+earthengine-api
+numpy
+requests
+rasterio
+shapely
+pyproj
+python-multipart

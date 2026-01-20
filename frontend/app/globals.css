@@ -1,0 +1,82 @@
+@import "mapbox-gl/dist/mapbox-gl.css";
+@import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+@import "leaflet/dist/leaflet.css";
+@import "leaflet-draw/dist/leaflet.draw.css";
+
+/* Fix marker icons (Leaflet quirk) */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* -------------------------------
+   GLOBAL THEME
+--------------------------------*/
+body {
+  background: #ffffff;
+  color: #111;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* -------------------------------
+   HEADINGS (3D EFFECT)
+--------------------------------*/
+h1, h2, h3 {
+  color: #000;
+  letter-spacing: 0.5px;
+  text-shadow:
+    0 2px 0 #ccc,
+    0 4px 0 #bbb,
+    0 6px 10px rgba(0,0,0,0.15);
+}
+
+/* -------------------------------
+   BUTTONS (BLACK, 3D)
+--------------------------------*/
+button {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  box-shadow:
+    0 4px 0 #222,
+    0 6px 15px rgba(0,0,0,0.3);
+  transition: all 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 0 #222,
+    0 8px 20px rgba(0,0,0,0.35);
+}
+
+button:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 #222;
+}
+
+button:disabled {
+  background: #666;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Swipe effect */
+.past-layer {
+  clip-path: inset(0 calc(100% - var(--slider)) 0 0);
+}
+
+/* Slider styling */
+.map-slider {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+}
