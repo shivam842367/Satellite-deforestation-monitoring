@@ -33,11 +33,15 @@ export default function Home() {
 
     try {
       // 1️⃣ Submit job
+      const cleanedAOI =
+        aoi.type === "FeatureCollection" ? aoi.features[0] : aoi;
+
       const { job_id } = await submitAnalysis({
-        aoi,
+        aoi: cleanedAOI,
         past_year: pastYear,
         present_year: presentYear,
       });
+
 
       // 2️⃣ Poll for result
       const interval = setInterval(async () => {

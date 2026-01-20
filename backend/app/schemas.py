@@ -1,7 +1,7 @@
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, Union
 
 class NDVIRequest(BaseModel):
-    aoi: Dict        # Accept GeoJSON
+    aoi: Dict  # Accepts Feature or FeatureCollection
     past_year: int
     present_year: int

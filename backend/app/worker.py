@@ -9,6 +9,11 @@ def run_ndvi_job(job_id, payload):
         # Extract inputs
         # -----------------------------
         aoi_geojson = payload["aoi"]
+
+        # Defensive handling (Feature or FeatureCollection)
+        if aoi_geojson["type"] == "FeatureCollection":
+            aoi_geojson = aoi_geojson["features"][0]
+
         coords = aoi_geojson["geometry"]["coordinates"]
 
         past_year = payload["past_year"]
