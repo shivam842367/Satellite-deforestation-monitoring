@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 
@@ -14,7 +14,6 @@ DESIGN OVERVIEW
 • /analyze is non-blocking (background job)
 • /result/{job_id} is used for polling
 • /analyze-demo provides stable fallback
-• Safe for Fly.io + GDAL
 """
 
 # -------------------------------------------------------------------
@@ -34,15 +33,11 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------------
-# STARTUP: EARTH ENGINE INIT (CRITICAL)
+# STARTUP: EARTH ENGINE INIT
 # -------------------------------------------------------------------
 
 @app.on_event("startup")
 def startup_event():
-    """
-    Initialize Earth Engine once for the entire app.
-    Fail fast if credentials are invalid.
-    """
     try:
         init_ee()
         print("Earth Engine initialized successfully.")
@@ -62,18 +57,21 @@ def health_check():
     }
 
 # -------------------------------------------------------------------
-# ANALYZE ENDPOINT (ASYNC SAFE)
+# ANALYZE ENDPOINT (PRODUCTION)
 # -------------------------------------------------------------------
 
 @app.post("/analyze")
-def analyze(req: NDVIRequest, bg: BackgroundTasks):
+async def analyze(
+    req: NDVIRequest,
+    bg: BackgroundTasks,
+    request: Request
+):
     """
     Starts a deforestation analysis job.
-
-    • Returns immediately with job_id
-    • EE + GDAL run in background
-    • Frontend polls /result/{job_id}
     """
+
+    # 🔍 Safe request logging (after validation)
+    print("VALIDATED REQUEST:", req.dict())
 
     job_id = str(uuid.uuid4())
 
@@ -94,10 +92,6 @@ def analyze(req: NDVIRequest, bg: BackgroundTasks):
 
 @app.get("/result/{job_id}")
 def get_result(job_id: str):
-    """
-    Returns job status or final result.
-    """
-
     if job_id not in jobs:
         raise HTTPException(
             status_code=404,
@@ -107,16 +101,25 @@ def get_result(job_id: str):
     return jobs[job_id]
 
 # -------------------------------------------------------------------
-# STABLE DEMO MODE ENDPOINT (OPTIONAL)
+# DEBUG ENDPOINT (RAW BODY – OPTIONAL)
+# -------------------------------------------------------------------
+
+@app.post("/debug/analyze-raw")
+async def analyze_raw(request: Request):
+    """
+    Debug-only endpoint to inspect raw JSON payload.
+    Does NOT use schema validation.
+    """
+    body = await request.json()
+    print("RAW REQUEST BODY:", body)
+    return {"received": body}
+
+# -------------------------------------------------------------------
+# STABLE DEMO MODE
 # -------------------------------------------------------------------
 
 @app.post("/analyze-demo")
 def analyze_demo():
-    """
-    Stable, synchronous demo endpoint.
-    Useful for UI testing or fallback demos.
-    """
-
     past_cover_ha = 120.5
     present_cover_ha = 95.2
 
