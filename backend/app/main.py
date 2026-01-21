@@ -1,24 +1,26 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict
 import uuid
 
 from app.schemas import NDVIRequest
-from app.jobs import jobs
 from app.worker import run_ndvi_job
 from app.ee_client import init_ee
-from typing import Dict
-
-JOB_STORE: Dict[str, dict] = {}
-
 
 """
 DESIGN OVERVIEW
 ---------------
 • Earth Engine initialized ONCE at startup
-• /analyze is non-blocking (background job)
-• /result/{job_id} is used for polling
-• /analyze-demo provides stable fallback
+• /analyze submits async NDVI job
+• /jobs/{job_id} is used for polling
+• In-memory job store (sufficient for demo & academic use)
 """
+
+# -------------------------------------------------------------------
+# GLOBAL JOB STORE
+# -------------------------------------------------------------------
+
+JOB_STORE: Dict[str, dict] = {}
 
 # -------------------------------------------------------------------
 # APP INITIALIZATION
@@ -44,9 +46,9 @@ app.add_middleware(
 def startup_event():
     try:
         init_ee()
-        print("Earth Engine initialized successfully.")
+        print("✅ Earth Engine initialized successfully.")
     except Exception as e:
-        raise RuntimeError(f"Earth Engine init failed: {e}")
+        raise RuntimeError(f"❌ Earth Engine init failed: {e}")
 
 # -------------------------------------------------------------------
 # HEALTH CHECK
@@ -61,36 +63,45 @@ def health_check():
     }
 
 # -------------------------------------------------------------------
-# ANALYZE ENDPOINT (PRODUCTION)
+# DEBUG ENDPOINT (RAW JSON – OPTIONAL)
 # -------------------------------------------------------------------
-from fastapi import Request
 
 @app.post("/debug/analyze-raw")
 async def debug_analyze_raw(request: Request):
     body = await request.json()
-    print("RAW BODY FROM FRONTEND:", body)
-    return body
+    print("🧪 RAW REQUEST BODY:", body)
+    return {"received": body}
+
+# -------------------------------------------------------------------
+# ANALYZE ENDPOINT (ASYNC – PRODUCTION)
+# -------------------------------------------------------------------
 
 @app.post("/analyze")
 async def analyze(
     req: NDVIRequest,
-    bg: BackgroundTasks,
-    request: Request
+    bg: BackgroundTasks
 ):
     """
-    Starts a deforestation analysis job.
+    Submits a deforestation analysis job.
+    Non-blocking. Use /jobs/{job_id} to poll.
     """
-
-    # 🔍 Safe request logging (after validation)
-    print("VALIDATED REQUEST:", req.dict())
 
     job_id = str(uuid.uuid4())
 
-    jobs[job_id] = {
-        "status": "processing"
+    # Initialize job state
+    JOB_STORE[job_id] = {
+        "status": "processing",
+        "result": None,
+        "error": None
     }
 
-    bg.add_task(run_ndvi_job, job_id, req.dict())
+    # Launch background task
+    bg.add_task(
+        run_ndvi_job,
+        job_id,
+        req.dict(),
+        JOB_STORE
+    )
 
     return {
         "job_id": job_id,
@@ -98,35 +109,28 @@ async def analyze(
     }
 
 # -------------------------------------------------------------------
-# RESULT POLLING ENDPOINT
+# JOB STATUS / RESULT POLLING
 # -------------------------------------------------------------------
 
-@app.get("/result/{job_id}")
-def get_result(job_id: str):
-    if job_id not in jobs:
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str):
+    job = JOB_STORE.get(job_id)
+
+    if not job:
         raise HTTPException(
             status_code=404,
             detail="Job ID not found"
         )
 
-    return jobs[job_id]
+    return {
+        "job_id": job_id,
+        "status": job["status"],
+        "result": job["result"],
+        "error": job["error"]
+    }
 
 # -------------------------------------------------------------------
-# DEBUG ENDPOINT (RAW BODY – OPTIONAL)
-# -------------------------------------------------------------------
-
-@app.post("/debug/analyze-raw")
-async def analyze_raw(request: Request):
-    """
-    Debug-only endpoint to inspect raw JSON payload.
-    Does NOT use schema validation.
-    """
-    body = await request.json()
-    print("RAW REQUEST BODY:", body)
-    return {"received": body}
-
-# -------------------------------------------------------------------
-# STABLE DEMO MODE
+# STABLE DEMO MODE (NO EE DEPENDENCY)
 # -------------------------------------------------------------------
 
 @app.post("/analyze-demo")
