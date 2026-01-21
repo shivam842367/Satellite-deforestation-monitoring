@@ -59,6 +59,13 @@ def health_check():
 # -------------------------------------------------------------------
 # ANALYZE ENDPOINT (PRODUCTION)
 # -------------------------------------------------------------------
+from fastapi import Request
+
+@app.post("/debug/analyze-raw")
+async def debug_analyze_raw(request: Request):
+    body = await request.json()
+    print("RAW BODY FROM FRONTEND:", body)
+    return body
 
 @app.post("/analyze")
 async def analyze(
