@@ -37,11 +37,10 @@ export default function Home() {
         aoi.type === "FeatureCollection" ? aoi.features[0] : aoi;
 
       const { job_id } = await submitAnalysis({
-        aoi: cleanedAOI,
+        geometry: cleanedAOI.geometry ?? cleanedAOI,
         past_year: pastYear,
         present_year: presentYear,
       });
-
 
       // 2️⃣ Poll for result
       const interval = setInterval(async () => {
