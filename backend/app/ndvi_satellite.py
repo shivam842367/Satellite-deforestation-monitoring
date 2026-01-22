@@ -5,13 +5,18 @@ def compute_satellite_ndvi(
     start_date,
     end_date,
     threshold=0.15,
-    collection="COPERNICUS/S2_SR_HARMONIZED",
-    return_map=False
+    collection="COPERNICUS/S2_SR_HARMONIZED"
 ):
+    """
+    Computes vegetation area (square meters) using NDVI.
+    RETURNS ONLY A NUMBER. NO TILE URL. NO MAPID.
+    """
+
     geometry = ee.Geometry.Polygon(aoi_coords)
 
-    nir = "B8"
-    red = "B4"
+    # Sentinel-2 bands
+    nir_band = "B8"
+    red_band = "B4"
     scale = 10
 
     collection = (
@@ -19,50 +24,36 @@ def compute_satellite_ndvi(
         .filterBounds(geometry)
         .filterDate(start_date, end_date)
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 40))
-        .select([nir, red])
+        .select([nir_band, red_band])
     )
 
+    # No images found
     if collection.size().getInfo() == 0:
-        if return_map:
-            return 0, None, None
-        return 0
+        return 0.0
 
-    image = collection.median()
+    median_image = collection.median()
 
-    ndvi = image.normalizedDifference([nir, red]).rename("NDVI")
+    ndvi = median_image.normalizedDifference(
+        [nir_band, red_band]
+    ).rename("NDVI")
 
-    # ---- Area calculation ----
-    veg = ndvi.gt(threshold)
-    area_img = veg.multiply(ee.Image.pixelArea())
+    vegetation_mask = ndvi.gt(threshold)
 
-    area = area_img.reduceRegion(
+    vegetation_area = vegetation_mask.multiply(
+        ee.Image.pixelArea()
+    )
+
+    stats = vegetation_area.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry,
         scale=scale,
-        maxPixels=1e13
-    ).get("NDVI")
+        maxPixels=1e13,
+        bestEffort=True
+    )
 
-    area = ee.Number(area)
+    area_sqm = stats.get("NDVI")
 
-    if not return_map:
-        return area
+    if area_sqm is None:
+        return 0.0
 
-    # ---- NDVI tiles ----
-    vis = {
-        "min": 0.0,
-        "max": 0.8,
-        "palette": ["brown", "yellow", "green"]
-    }
-
-    map_id = ndvi.getMapId(vis)
-    tile_url = map_id["tile_fetcher"].url_format
-
-    # ---- Histogram ----
-    hist = ndvi.reduceRegion(
-        reducer=ee.Reducer.histogram(20),
-        geometry=geometry,
-        scale=scale,
-        maxPixels=1e13
-    ).get("NDVI")
-
-    return area, tile_url, hist
+    return ee.Number(area_sqm).getInfo()
