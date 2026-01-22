@@ -6,13 +6,9 @@ import shutil
 from pathlib import Path
 import threading
 
-# ================================
-# INTERNAL IMPORTS (MATCH TREE)
-# ================================
 from app.worker import run_ndvi_job
 from app.schemas import NDVIRequest
 from app.ee_client import init_ee
-from app.jobs import router as jobs_router
 from app.tiles import router as tiles_router
 
 # ================================
@@ -24,7 +20,7 @@ app = FastAPI(
 )
 
 # ================================
-# GLOBAL STATE
+# GLOBAL STORES
 # ================================
 JOB_STORE: Dict[str, dict] = {}
 UPLOAD_DIR = Path("data/uploads")
@@ -41,13 +37,7 @@ app.add_middleware(
 )
 
 # ================================
-# ROUTERS
-# ================================
-app.include_router(jobs_router)
-app.include_router(tiles_router)
-
-# ================================
-# EARTH ENGINE INIT (BACKGROUND)
+# EARTH ENGINE INIT
 # ================================
 def init_ee_background():
     try:
@@ -57,8 +47,13 @@ def init_ee_background():
         print(f"⚠️ Earth Engine init failed: {e}")
 
 @app.on_event("startup")
-def startup_event():
+def startup():
     threading.Thread(target=init_ee_background, daemon=True).start()
+
+# ================================
+# ROUTERS
+# ================================
+app.include_router(tiles_router)
 
 # ================================
 # HEALTH CHECK
@@ -80,18 +75,17 @@ async def upload_drone_image(file: UploadFile = File(...)):
 
     return {
         "file_id": file_id,
-        "filename": file.filename,
-        "size_mb": round(path.stat().st_size / (1024 * 1024), 2),
+        "filename": file.filename
     }
 
 # ================================
-# ANALYSIS ENDPOINT
+# ANALYZE ENDPOINT
 # ================================
 @app.post("/analyze")
 async def analyze(
     req: NDVIRequest,
     bg: BackgroundTasks,
-    drone_image_id: str | None = None,
+    drone_image_id: str | None = None
 ):
     job_id = str(uuid.uuid4())
     JOB_STORE[job_id] = {"status": "processing"}
@@ -111,7 +105,7 @@ async def analyze(
 # JOB STATUS
 # ================================
 @app.get("/jobs/{job_id}")
-def get_job(job_id: str):
+def job_status(job_id: str):
     if job_id not in JOB_STORE:
         raise HTTPException(status_code=404, detail="Job not found")
     return JOB_STORE[job_id]
