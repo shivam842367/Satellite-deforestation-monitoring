@@ -16,6 +16,12 @@ export default function MapAOIClient({ onAOISelect }: Props) {
   // STATE: Past vs Present toggle
   // ======================================
   const [yearView, setYearView] = useState<"past" | "present">("present");
+  const NDVI_PAST_TILE =
+  "https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/NDVI_PAST/{z}/{x}/{y}";
+
+  const NDVI_PRESENT_TILE =
+  "https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/NDVI_PRESENT/{z}/{x}/{y}";
+
 
   // ======================================
   // TILE LAYER SWITCH (VISUAL ONLY)

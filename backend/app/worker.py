@@ -20,21 +20,23 @@ def run_ndvi_job(job_id: str, payload: dict, job_store: Dict):
         # -----------------------------
         # SATELLITE NDVI (SQUARE METERS)
         # -----------------------------
-        past_sqm = ee.Number(
-            compute_satellite_ndvi(
-                geometry,
-                f"{past_year}-01-01",
-                f"{past_year}-12-31"
-            )
-        ).getInfo()
+        past_sqm, past_tile = compute_satellite_ndvi(
+            geometry,
+            f"{past_year}-01-01",
+            f"{past_year}-12-31",
+            return_map=True
+        )
 
-        present_sqm = ee.Number(
-            compute_satellite_ndvi(
-                geometry,
-                f"{present_year}-01-01",
-                f"{present_year}-12-31"
-            )
-        ).getInfo()
+        present_sqm, present_tile = compute_satellite_ndvi(
+            geometry,
+            f"{present_year}-01-01",
+            f"{present_year}-12-31",
+            return_map=True
+        )
+
+        past_sqm = ee.Number(past_sqm).getInfo() or 0
+        present_sqm = ee.Number(present_sqm).getInfo() or 0
+
 
         # SAFETY GUARD
         past_sqm = past_sqm or 0
@@ -78,6 +80,11 @@ def run_ndvi_job(job_id: str, payload: dict, job_store: Dict):
                 payload["drone_image_path"],
                 aoi
             )
+            
+        result["ndvi_tiles"] = {
+            "past": past_tile,
+            "present": present_tile
+        }
 
         job_store[job_id]["status"] = "completed"
         job_store[job_id]["result"] = result

@@ -2,35 +2,50 @@
 
 import { useState } from "react";
 import MapAOI from "../components/MapAOI";
+import ResultsPanel from "../components/ResultsPanel";
 
 /* =========================================================
    MAIN PAGE COMPONENT
 ========================================================= */
 export default function DeforestationMonitor() {
-  /* ---------------- STATE ---------------- */
-  const [aoi, setAOI] = useState<any>(null);
-  const [geojsonInput, setGeojsonInput] = useState("");
+
+  /* =========================================================
+     STATE: AOI SELECTION
+  ========================================================= */
+  const [aoi, setAOI] = useState<number[][][] | null>(null);
+
+  const [geojsonInput, setGeojsonInput] = useState<string>("");
   const [aoiMode, setAOIMode] = useState<"map" | "geojson">("map");
   const [geojsonError, setGeojsonError] = useState<string | null>(null);
 
-
-
+  /* =========================================================
+     STATE: TIME PERIOD
+  ========================================================= */
   const [pastYear, setPastYear] = useState<number>(2016);
   const [presentYear, setPresentYear] = useState<number>(2024);
 
+  /* =========================================================
+     STATE: DRONE IMAGE
+  ========================================================= */
   const [droneFile, setDroneFile] = useState<File | null>(null);
   const [droneFileId, setDroneFileId] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>("");
 
+  /* =========================================================
+     STATE: ANALYSIS / JOB
+  ========================================================= */
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>("");
 
+  /* =========================================================
+     CONFIG
+  ========================================================= */
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
   /* =========================================================
-     DRONE FILE UPLOAD
+     DRONE FILE UPLOAD HANDLER
   ========================================================= */
   async function handleDroneUpload() {
     if (!droneFile) {
@@ -54,21 +69,23 @@ export default function DeforestationMonitor() {
       }
 
       const data = await response.json();
+
       setDroneFileId(data.file_id);
       setUploadStatus(
         `Uploaded: ${data.filename} (${data.size_mb} MB)`
       );
+
     } catch (err: any) {
       setUploadStatus(`Upload failed: ${err.message}`);
     }
   }
 
   /* =========================================================
-     RUN ANALYSIS
+     RUN ANALYSIS (SUBMIT + POLL)
   ========================================================= */
   async function runAnalysis() {
     if (!aoi) {
-      setError("Please draw an area of interest on the map");
+      setError("Please select an Area of Interest first");
       return;
     }
 
@@ -102,6 +119,7 @@ export default function DeforestationMonitor() {
       }
 
       const { job_id } = await submitResponse.json();
+
       setProgress(`Job submitted (ID: ${job_id.slice(0, 8)}…)`);
 
       const pollInterval = setInterval(async () => {
@@ -109,7 +127,7 @@ export default function DeforestationMonitor() {
         const jobData = await pollResponse.json();
 
         if (jobData.status === "completed") {
-          setResult(jobData);
+          setResult(jobData.result);
           setLoading(false);
           setProgress("");
           clearInterval(pollInterval);
@@ -122,6 +140,7 @@ export default function DeforestationMonitor() {
           setProgress("Processing satellite and drone data...");
         }
       }, 3000);
+
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -134,6 +153,8 @@ export default function DeforestationMonitor() {
   ========================================================= */
   return (
     <div style={containerStyle}>
+
+      {/* ================= HEADER ================= */}
       <h1 style={{ marginBottom: "0.5rem" }}>
         🛰️ Drone-Based Deforestation Monitor
       </h1>
@@ -143,93 +164,68 @@ export default function DeforestationMonitor() {
       </p>
 
       {/* ================= STEP 1 ================= */}
-      <section className="card fade-in" style={{ padding: "1.5rem", marginBottom: "2rem" }}>
-      <h2 className="section-title">Step 1: Select Area of Interest</h2>
+      <section className="card fade-in" style={sectionStyle}>
+        <h2 className="section-title">Step 1: Select Area of Interest</h2>
 
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
-        <button onClick={() => setAOIMode("map")} className="btn">
-          🗺️ Draw on Map
-        </button>
-        <button onClick={() => setAOIMode("geojson")} className="btn">
-          🧾 Paste GeoJSON
-        </button>
-      </div>
-
-      {aoiMode === "map" && (
-        <MapAOI onAOISelect={setAOI} />
-      )}
-
-      {aoiMode === "geojson" && (
-        <>
-          <textarea
-            placeholder="Paste GeoJSON Polygon coordinates here"
-            value={geojsonInput}
-            onChange={(e) => setGeojsonInput(e.target.value)}
-            style={{
-              width: "100%",
-              height: "140px",
-              background: "#000",
-              color: "#fff",
-              borderRadius: "8px",
-              padding: "1rem",
-              border: "1px solid #333",
-            }}
-          />
-          
-          <button
-          style={{ marginTop: "1rem" }}
-          onClick={() => {
-            try {
-              setGeojsonError(null);
-
-              const parsed = JSON.parse(geojsonInput);
-
-              // Accept both full GeoJSON and raw coordinates
-              let coordinates: number[][][];
-
-              if (parsed.type === "Polygon" && parsed.coordinates) {
-                coordinates = parsed.coordinates;
-              } else if (Array.isArray(parsed)) {
-                coordinates = parsed;
-              } else {
-                throw new Error("Invalid GeoJSON format");
-              }
-
-              // Basic validation
-              if (
-                !Array.isArray(coordinates) ||
-                !Array.isArray(coordinates[0]) ||
-                coordinates[0].length < 3
-              ) {
-                throw new Error("Invalid polygon coordinates");
-              }
-
-              setAOI(coordinates);
-
-            } catch (err: any) {
-              setGeojsonError(err.message || "Invalid GeoJSON");
-            }
-          }}
-        >
-          ✅ Use GeoJSON AOI
-        </button>
-        {geojsonError && (
-        <div style={{ marginTop: "0.5rem", color: "red" }}>
-          ❌ {geojsonError}
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+          <button onClick={() => setAOIMode("map")}>
+            🗺️ Draw on Map
+          </button>
+          <button onClick={() => setAOIMode("geojson")}>
+            🧾 Paste GeoJSON
+          </button>
         </div>
-      )}
 
+        {aoiMode === "map" && (
+          <MapAOI onAOISelect={setAOI} />
+        )}
 
-        </>
-      )}
+        {aoiMode === "geojson" && (
+          <>
+            <textarea
+              placeholder="Paste GeoJSON Polygon here"
+              value={geojsonInput}
+              onChange={(e) => setGeojsonInput(e.target.value)}
+              style={geojsonStyle}
+            />
 
-      {aoi && (
-        <div style={{ marginTop: "1rem", color: "var(--accent)" }}>
-          AOI selected with {aoi[0].length} points
-        </div>
-      )}
-    </section>
+            <button
+              style={{ marginTop: "1rem" }}
+              onClick={() => {
+                try {
+                  setGeojsonError(null);
+                  const parsed = JSON.parse(geojsonInput);
 
+                  if (
+                    parsed.type === "Polygon" &&
+                    Array.isArray(parsed.coordinates)
+                  ) {
+                    setAOI(parsed.coordinates);
+                  } else {
+                    throw new Error("Invalid GeoJSON Polygon");
+                  }
+                } catch (err: any) {
+                  setGeojsonError(err.message || "Invalid GeoJSON");
+                }
+              }}
+            >
+              ✅ Use GeoJSON AOI
+            </button>
+
+            {geojsonError && (
+              <div style={{ marginTop: "0.5rem", color: "red" }}>
+                ❌ {geojsonError}
+              </div>
+            )}
+          </>
+        )}
+
+        {aoi && (
+          <div style={{ marginTop: "1rem", color: "green" }}>
+            AOI selected with {aoi[0].length} points
+          </div>
+        )}
+      </section>
 
       {/* ================= STEP 2 ================= */}
       <section style={sectionStyle}>
@@ -238,16 +234,10 @@ export default function DeforestationMonitor() {
         <input
           type="file"
           accept=".tif,.tiff"
-          onChange={(e) =>
-            setDroneFile(e.target.files?.[0] || null)
-          }
+          onChange={(e) => setDroneFile(e.target.files?.[0] || null)}
         />
 
-        <button
-          onClick={handleDroneUpload}
-          disabled={!droneFile}
-          style={buttonStyle}
-        >
+        <button onClick={handleDroneUpload} disabled={!droneFile}>
           Upload
         </button>
 
@@ -266,22 +256,16 @@ export default function DeforestationMonitor() {
             onChange={(e) => setPastYear(Number(e.target.value))}
           >
             {[2010, 2012, 2014, 2016, 2018, 2020].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
+              <option key={y} value={y}>{y}</option>
             ))}
           </select>
 
           <select
             value={presentYear}
-            onChange={(e) =>
-              setPresentYear(Number(e.target.value))
-            }
+            onChange={(e) => setPresentYear(Number(e.target.value))}
           >
             {[2020, 2021, 2022, 2023, 2024].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
+              <option key={y} value={y}>{y}</option>
             ))}
           </select>
         </div>
@@ -292,10 +276,7 @@ export default function DeforestationMonitor() {
         <button
           onClick={runAnalysis}
           disabled={!aoi || loading}
-          style={{
-            ...buttonStyle,
-            background: loading ? "#666" : "#000",
-          }}
+          style={{ ...buttonStyle, background: loading ? "#666" : "#000" }}
         >
           {loading ? "Processing…" : "Run Analysis"}
         </button>
@@ -314,68 +295,15 @@ export default function DeforestationMonitor() {
       </section>
 
       {/* ================= RESULTS ================= */}
-      {result && (
-        <section style={{ ...sectionStyle, background: "#f9fafb" }}>
-          <h2>📊 Analysis Results</h2>
+      {result && <ResultsPanel result={result} aoi={aoi} />
+}
 
-          {result.satellite_comparison ? (
-            <div style={resultCardStyle}>
-              <StatBox
-                label="Past Vegetation Cover"
-                value={`${result.satellite_comparison.past_cover_ha} ha`}
-                color="#27ae60"
-              />
-              <StatBox
-                label="Present Vegetation Cover"
-                value={`${result.satellite_comparison.present_cover_ha} ha`}
-                color="#e67e22"
-              />
-            </div>
-          ) : (
-            <div style={infoBoxStyle}>
-              No significant vegetation detected in this AOI.
-            </div>
-          )}
-
-          {result.summary && (
-            <div style={resultCardStyle}>
-              <strong>Total Loss:</strong>{" "}
-              {result.summary.total_loss_ha} ha (
-              {result.summary.total_loss_pct}%)
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 }
 
 /* =========================================================
-   HELPER COMPONENT
-========================================================= */
-function StatBox({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div style={statBoxStyle}>
-      <div style={{ fontSize: "0.85rem", color: "#666" }}>
-        {label}
-      </div>
-      <div style={{ fontSize: "1.5rem", fontWeight: 700, color }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   STYLES
+   STYLES (UNCHANGED)
 ========================================================= */
 const containerStyle: React.CSSProperties = {
   padding: "2rem",
@@ -401,23 +329,12 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const infoBoxStyle: React.CSSProperties = {
-  marginTop: "1rem",
+const geojsonStyle: React.CSSProperties = {
+  width: "100%",
+  height: "140px",
+  background: "#000",
+  color: "#fff",
   padding: "1rem",
-  background: "#f0f9ff",
-  borderRadius: "6px",
-};
-
-const resultCardStyle: React.CSSProperties = {
-  marginTop: "1rem",
-  padding: "1rem",
-  background: "#fff",
-  borderRadius: "6px",
-};
-
-const statBoxStyle: React.CSSProperties = {
-  padding: "1rem",
-  background: "#fafafa",
-  borderRadius: "6px",
-  border: "1px solid #ddd",
+  borderRadius: "8px",
+  border: "1px solid #333",
 };

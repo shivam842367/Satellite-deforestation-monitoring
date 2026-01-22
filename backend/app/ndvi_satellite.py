@@ -1,57 +1,42 @@
 import ee
-
-
 def compute_satellite_ndvi(
     aoi_coords,
     start_date,
     end_date,
     threshold=0.15,
-    collection="COPERNICUS/S2_SR_HARMONIZED"
+    collection="COPERNICUS/S2_SR_HARMONIZED",
+    return_map=False
 ):
     geometry = ee.Geometry.Polygon(aoi_coords)
 
-    # Band configuration
-    if "COPERNICUS/S2" in collection:
-        nir_band = "B8"
-        red_band = "B4"
-        cloud_property = "CLOUDY_PIXEL_PERCENTAGE"
-        scale = 10
-    else:
-        nir_band = "SR_B5"
-        red_band = "SR_B4"
-        cloud_property = "CLOUD_COVER"
-        scale = 30
+    nir_band = "B8"
+    red_band = "B4"
+    scale = 10
 
-    # Load and filter imagery
     img_collection = (
         ee.ImageCollection(collection)
         .filterBounds(geometry)
         .filterDate(start_date, end_date)
-        .filter(ee.Filter.lt(cloud_property, 40))
+        .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 40))
         .select([nir_band, red_band])
     )
 
-    # No imagery case
     if img_collection.size().getInfo() == 0:
-        return ee.Number(0)
+        if return_map:
+            return 0, None
+        return 0
 
-    # Median composite
     median_image = img_collection.median()
 
-    # NDVI computation
-    ndvi = median_image.normalizedDifference([nir_band, red_band]).rename("ndvi")
+    ndvi = median_image.normalizedDifference(
+        [nir_band, red_band]
+    ).rename("NDVI")
 
-    # Vegetation mask (CRITICAL)
-    vegetation_mask = ndvi.gt(threshold).selfMask()
+    # ---- AREA COMPUTATION (UNCHANGED) ----
+    vegetation = ndvi.gt(threshold)
+    area_image = vegetation.multiply(ee.Image.pixelArea())
 
-    # Pixel area in square meters
-    pixel_area = ee.Image.pixelArea()
-
-    # Vegetation area image (named band!)
-    vegetation_area_image = vegetation_mask.multiply(pixel_area).rename("veg_area")
-
-    # Reduce over AOI
-    area_stats = vegetation_area_image.reduceRegion(
+    area_stats = area_image.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry,
         scale=scale,
@@ -59,5 +44,19 @@ def compute_satellite_ndvi(
         bestEffort=True
     )
 
-    # Area in square meters → hectares
-    return ee.Number(area_stats.get("veg_area"))
+    area = ee.Number(area_stats.get("NDVI", 0))
+
+    # ---- MAP TILE EXPORT (NEW) ----
+    if return_map:
+        vis = {
+            "min": 0.0,
+            "max": 0.8,
+            "palette": ["brown", "yellow", "green"]
+        }
+
+        map_id = ndvi.getMapId(vis)
+        tile_url = map_id["tile_fetcher"].url_format
+
+        return area, tile_url
+
+    return area
