@@ -1,6 +1,5 @@
 import ee
 
-
 def compute_satellite_ndvi(
     aoi_coords,
     start_date,
@@ -11,82 +10,59 @@ def compute_satellite_ndvi(
 ):
     geometry = ee.Geometry.Polygon(aoi_coords)
 
-    nir_band = "B8"
-    red_band = "B4"
+    nir = "B8"
+    red = "B4"
     scale = 10
 
-    # --------------------------------------------------
-    # IMAGE COLLECTION
-    # --------------------------------------------------
-    img_collection = (
+    collection = (
         ee.ImageCollection(collection)
         .filterBounds(geometry)
         .filterDate(start_date, end_date)
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 40))
-        .select([nir_band, red_band])
+        .select([nir, red])
     )
 
-    if img_collection.size().getInfo() == 0:
+    if collection.size().getInfo() == 0:
         if return_map:
-            return 0, None, []
+            return 0, None, None
         return 0
 
-    # --------------------------------------------------
-    # NDVI IMAGE
-    # --------------------------------------------------
-    median_image = img_collection.median()
+    image = collection.median()
 
-    ndvi = median_image.normalizedDifference(
-        [nir_band, red_band]
-    ).rename("NDVI")
+    ndvi = image.normalizedDifference([nir, red]).rename("NDVI")
 
-    # --------------------------------------------------
-    # VEGETATION AREA (SQ METERS)
-    # --------------------------------------------------
-    vegetation = ndvi.gt(threshold)
-    area_image = vegetation.multiply(ee.Image.pixelArea())
+    # ---- Area calculation ----
+    veg = ndvi.gt(threshold)
+    area_img = veg.multiply(ee.Image.pixelArea())
 
-    area_stats = area_image.reduceRegion(
+    area = area_img.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry,
         scale=scale,
-        maxPixels=1e13,
-        bestEffort=True
-    )
+        maxPixels=1e13
+    ).get("NDVI")
 
-    area_sqm = ee.Number(area_stats.get("NDVI", 0))
+    area = ee.Number(area)
 
-    # --------------------------------------------------
-    # HISTOGRAM (NDVI DISTRIBUTION)
-    # --------------------------------------------------
+    if not return_map:
+        return area
+
+    # ---- NDVI tiles ----
+    vis = {
+        "min": 0.0,
+        "max": 0.8,
+        "palette": ["brown", "yellow", "green"]
+    }
+
+    map_id = ndvi.getMapId(vis)
+    tile_url = map_id["tile_fetcher"].url_format
+
+    # ---- Histogram ----
     hist = ndvi.reduceRegion(
         reducer=ee.Reducer.histogram(20),
         geometry=geometry,
         scale=scale,
-        maxPixels=1e13,
-        bestEffort=True
+        maxPixels=1e13
     ).get("NDVI")
 
-    histogram = ee.Dictionary(hist).getInfo() if hist else []
-
-    # --------------------------------------------------
-    # TILE MAP EXPORT
-    # --------------------------------------------------
-    if return_map:
-        ndvi_vis = {
-            "min": 0.0,
-            "max": 0.8,
-            "palette": [
-                "#8c510a",  # brown
-                "#d8b365",  # yellow
-                "#5ab4ac",  # light green
-                "#01665e"   # dark green
-            ]
-        }
-
-        ndvi_map = ndvi.getMapId(ndvi_vis)
-        tile_url = ndvi_map["tile_fetcher"].url_format
-
-        return area_sqm, tile_url, histogram
-
-    return area_sqm
+    return area, tile_url, hist
