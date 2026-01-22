@@ -1,16 +1,16 @@
 import ee
-from typing import List
 
 
 def compute_satellite_ndvi(
     aoi_coords,
     start_date,
     end_date,
-    threshold=0.02,
+    threshold=0.15,
     collection="COPERNICUS/S2_SR_HARMONIZED"
 ):
     geometry = ee.Geometry.Polygon(aoi_coords)
 
+    # Band configuration
     if "COPERNICUS/S2" in collection:
         nir_band = "B8"
         red_band = "B4"
@@ -22,26 +22,36 @@ def compute_satellite_ndvi(
         cloud_property = "CLOUD_COVER"
         scale = 30
 
+    # Load and filter imagery
     img_collection = (
         ee.ImageCollection(collection)
         .filterBounds(geometry)
         .filterDate(start_date, end_date)
         .filter(ee.Filter.lt(cloud_property, 40))
-        .select([nir_band, red_band])   # 🔥 CRITICAL FIX
+        .select([nir_band, red_band])
     )
 
+    # No imagery case
     if img_collection.size().getInfo() == 0:
         return ee.Number(0)
 
+    # Median composite
     median_image = img_collection.median()
 
-    ndvi = median_image.normalizedDifference([nir_band, red_band]).rename("NDVI")
+    # NDVI computation
+    ndvi = median_image.normalizedDifference([nir_band, red_band]).rename("ndvi")
 
-    vegetation = ndvi.gt(threshold)
+    # Vegetation mask (CRITICAL)
+    vegetation_mask = ndvi.gt(threshold).selfMask()
 
-    area_image = vegetation.multiply(ee.Image.pixelArea())
+    # Pixel area in square meters
+    pixel_area = ee.Image.pixelArea()
 
-    area_stats = area_image.reduceRegion(
+    # Vegetation area image (named band!)
+    vegetation_area_image = vegetation_mask.multiply(pixel_area).rename("veg_area")
+
+    # Reduce over AOI
+    area_stats = vegetation_area_image.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry,
         scale=scale,
@@ -49,4 +59,7 @@ def compute_satellite_ndvi(
         bestEffort=True
     )
 
-    return ee.Number(area_stats.get("NDVI", 0))
+    # Area in square meters → hectares
+    vegetation_area_ha = ee.Number(area_stats.get("veg_area")).divide(10000)
+
+    return vegetation_area_ha
