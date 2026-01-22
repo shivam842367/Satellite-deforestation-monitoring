@@ -1,4 +1,4 @@
-const API_BASE = "https://deforestation-backend.onrender.com/analyze";
+const API_BASE = "https://deforestation-backend.onrender.com";
 
 export async function submitAnalysis({
   aoi,
