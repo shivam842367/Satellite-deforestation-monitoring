@@ -1,6 +1,7 @@
 import ee
 import traceback
 from typing import Dict
+
 from app.ndvi_satellite import compute_satellite_ndvi
 from app.ndvi_drone import process_drone_data_for_comparison
 
@@ -18,10 +19,8 @@ def run_ndvi_job(job_id: str, payload: dict, job_store: Dict):
         present_year = payload["present_year"]
 
         # --------------------------------------------------
-        # SATELLITE NDVI (AREA + TILE MAPS)
+        # SATELLITE NDVI (AREA + TILE + HISTOGRAM)
         # --------------------------------------------------
-        result = {}
-
         past_area, past_tile, past_hist = compute_satellite_ndvi(
             geometry,
             f"{past_year}-01-01",
@@ -36,36 +35,20 @@ def run_ndvi_job(job_id: str, payload: dict, job_store: Dict):
             return_map=True
         )
 
-        past_ha = ee.Number(past_area).getInfo() / 10000
-        present_ha = ee.Number(present_area).getInfo() / 10000
+        past_sqm = ee.Number(past_area).getInfo() or 0
+        present_sqm = ee.Number(present_area).getInfo() or 0
 
-        # ΔNDVI
-        diff_ndvi = ee.Image(present_tile).subtract(ee.Image(past_tile))
-        diff_vis = {
-            "min": -0.4,
-            "max": 0.4,
-            "palette": ["red", "white", "green"]
-        }
-        diff_tile = diff_ndvi.getMapId(diff_vis)["tile_fetcher"].url_format
+        past_ha = past_sqm / 10000
+        present_ha = present_sqm / 10000
 
-        result["ndvi_tiles"] = {
-            "past": past_tile,
-            "present": present_tile,
-            "diff": diff_tile
-        }
-
-        result["ndvi_histogram"] = present_hist
-
-        result["satellite_comparison"] = {
-            "past_year": past_year,
-            "present_year": present_year,
-            "past_cover_ha": round(past_ha, 2),
-            "present_cover_ha": round(present_ha, 2),
-            "change_ha": round(present_ha - past_ha, 2)
-        }
+        satellite_rate = calculate_deforestation_rate(
+            past_ha,
+            present_ha,
+            present_year - past_year
+        )
 
         # --------------------------------------------------
-        # RESULT OBJECT (INITIALIZE ONCE)
+        # RESULT OBJECT (INITIALIZE ONCE — DO NOT TOUCH AGAIN)
         # --------------------------------------------------
         result = {}
 
@@ -77,21 +60,25 @@ def run_ndvi_job(job_id: str, payload: dict, job_store: Dict):
         else:
             result["satellite_comparison"] = {
                 "past_year": past_year,
-                "past_cover_ha": round(past_ha, 2),
                 "present_year": present_year,
+                "past_cover_ha": round(past_ha, 2),
                 "present_cover_ha": round(present_ha, 2),
                 "change_ha": round(present_ha - past_ha, 2),
                 "deforestation_rate_pct_per_year": satellite_rate
             }
 
         # --------------------------------------------------
-        # NDVI TILE MAPS (FOR FRONTEND VISUALIZATION)
+        # NDVI TILE MAPS (NO IMAGE MATH HERE)
         # --------------------------------------------------
         result["ndvi_tiles"] = {
             "past": past_tile,
-            "present": present_tile,
-            # diff will be added once you compute ΔNDVI in ndvi_satellite.py
+            "present": present_tile
         }
+
+        # --------------------------------------------------
+        # NDVI HISTOGRAM (FOR FRONTEND)
+        # --------------------------------------------------
+        result["ndvi_histogram"] = present_hist
 
         # --------------------------------------------------
         # DRONE DATA (OPTIONAL)
@@ -107,7 +94,7 @@ def run_ndvi_job(job_id: str, payload: dict, job_store: Dict):
             )
 
         # --------------------------------------------------
-        # JOB FINALIZE
+        # FINALIZE JOB
         # --------------------------------------------------
         job_store[job_id]["status"] = "completed"
         job_store[job_id]["result"] = result
