@@ -8,12 +8,28 @@ from pathlib import Path
 from app.worker import run_ndvi_job
 from app.schemas import NDVIRequest
 from app.ee_client import init_ee
+import threading
 
 JOB_STORE: Dict[str, dict] = {}
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+
 app = FastAPI(title="Deforestation Monitoring API")
+
+def init_ee_background():
+    try:
+        init_ee()
+        print("✅ Earth Engine initialized")
+    except Exception as e:
+        print(f"⚠️ Earth Engine init failed: {e}")
+
+@app.on_event("startup")
+def startup():
+    # Run EE init in background so app can boot
+    threading.Thread(target=init_ee_background, daemon=True).start()
+
+
 
 app.add_middleware(
     CORSMiddleware,
