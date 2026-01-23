@@ -3,9 +3,7 @@
 import { useMemo } from "react";
 
 /* =========================================================
-   RESULTS PANEL (NO TILES • STABLE • PRODUCTION SAFE)
-   - Removes all Earth Engine tiles
-   - Adds Gain vs Loss bar chart
+   RESULTS PANEL — NO MAPS, NO TILES
 ========================================================= */
 export default function ResultsPanel({ result }: { result: any }) {
   if (!result || !result.satellite_comparison) return null;
@@ -19,29 +17,24 @@ export default function ResultsPanel({ result }: { result: any }) {
   } = result.satellite_comparison;
 
   /* =======================================================
-     VEGETATION CLASSIFICATION
+     CALCULATIONS
   ======================================================= */
-  const trend =
-    change_ha > 0
-      ? { label: "Vegetation Gain", color: "#27ae60" }
-      : change_ha < 0
-      ? { label: "Vegetation Loss", color: "#c0392b" }
-      : { label: "Stable", color: "#7f8c8d" };
+  const percentageChange = useMemo(() => {
+    if (!past_cover_ha || past_cover_ha === 0) return 0;
+    return ((present_cover_ha - past_cover_ha) / past_cover_ha) * 100;
+  }, [past_cover_ha, present_cover_ha]);
+
+  const isGain = change_ha > 0;
+  const absChange = Math.abs(change_ha);
 
   /* =======================================================
-     GAIN / LOSS SPLIT (SIMPLE MODEL)
-     You can refine this later with ΔNDVI bins
+     VISUAL SCALE (CAP TO AVOID EXAGGERATION)
   ======================================================= */
-  const gain = change_ha > 0 ? change_ha : 0;
-  const loss = change_ha < 0 ? Math.abs(change_ha) : 0;
-  const maxBar = Math.max(gain, loss, 1);
-
-  /* =======================================================
-     NDVI HISTOGRAM (OPTIONAL)
-  ======================================================= */
-  const histogram = Array.isArray(result.ndvi_histogram)
-    ? result.ndvi_histogram
-    : [];
+  const MAX_VISUAL_PERCENT = 5; // ±5% fills bar completely
+  const visualPercent = Math.min(
+    Math.abs(percentageChange),
+    MAX_VISUAL_PERCENT
+  );
 
   /* =======================================================
      RENDER
@@ -50,13 +43,13 @@ export default function ResultsPanel({ result }: { result: any }) {
     <section
       style={{
         marginTop: "2rem",
-        padding: "1.5rem",
+        padding: "1.75rem",
         borderRadius: "16px",
         background: "#fff",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+        boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
       }}
     >
-      <h2 style={{ marginBottom: "1.5rem" }}>📊 Analysis Results</h2>
+      <h2 style={{ marginBottom: "1.25rem" }}>📊 Analysis Results</h2>
 
       {/* ================= STATS ================= */}
       <div
@@ -64,138 +57,107 @@ export default function ResultsPanel({ result }: { result: any }) {
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
           gap: "1rem",
-          marginBottom: "2rem",
+          marginBottom: "1.75rem",
         }}
       >
         <StatBox
           label={`Past Vegetation (${past_year})`}
-          value={`${past_cover_ha} ha`}
+          value={`${past_cover_ha.toFixed(2)} ha`}
           color="#27ae60"
         />
         <StatBox
           label={`Present Vegetation (${present_year})`}
-          value={`${present_cover_ha} ha`}
+          value={`${present_cover_ha.toFixed(2)} ha`}
           color="#e67e22"
         />
         <StatBox
-          label="Vegetation Trend"
-          value={trend.label}
-          color={trend.color}
+          label="Percentage Change"
+          value={`${percentageChange.toFixed(2)}%`}
+          color={percentageChange >= 0 ? "#27ae60" : "#c0392b"}
         />
       </div>
 
-      {/* ================= GAIN vs LOSS BAR ================= */}
-      <div style={{ marginBottom: "2rem" }}>
-        <h4 style={{ marginBottom: "0.75rem" }}>🌿 Vegetation Gain vs Loss</h4>
+      {/* ================= GAIN VS LOSS ================= */}
+      <div>
+        <h4 style={{ marginBottom: "0.75rem" }}>
+          🌿 Vegetation Gain vs Loss
+        </h4>
+
+        {/* Diverging Bar */}
+        <div
+          style={{
+            position: "relative",
+            height: "18px",
+            background: "#ecf0f1",
+            borderRadius: "999px",
+            overflow: "hidden",
+          }}
+        >
+          {/* Center Line */}
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 0,
+              bottom: 0,
+              width: "2px",
+              background: "#bbb",
+            }}
+          />
+
+          {/* Gain */}
+          {isGain && (
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                height: "100%",
+                width: `${(visualPercent / MAX_VISUAL_PERCENT) * 50}%`,
+                background: "#27ae60",
+              }}
+            />
+          )}
+
+          {/* Loss */}
+          {!isGain && (
+            <div
+              style={{
+                position: "absolute",
+                right: "50%",
+                height: "100%",
+                width: `${(visualPercent / MAX_VISUAL_PERCENT) * 50}%`,
+                background: "#c0392b",
+              }}
+            />
+          )}
+        </div>
+
+        {/* Labels */}
+        <div
+          style={{
+            marginTop: "0.5rem",
+            fontSize: "0.85rem",
+            color: "#555",
+          }}
+        >
+          {change_ha === 0
+            ? "No detectable change"
+            : isGain
+            ? `Gain of ${absChange.toFixed(2)} ha`
+            : `Loss of ${absChange.toFixed(2)} ha`}
+        </div>
 
         <div
           style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: "2rem",
-            height: "160px",
+            marginTop: "0.25rem",
+            fontSize: "0.75rem",
+            color: "#888",
           }}
         >
-          <Bar
-            label="Gain"
-            value={gain}
-            max={maxBar}
-            color="#27ae60"
-          />
-          <Bar
-            label="Loss"
-            value={loss}
-            max={maxBar}
-            color="#c0392b"
-          />
-        </div>
-
-        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#555" }}>
-          Values shown in hectares (ha)
+          Bar scaled to ±{MAX_VISUAL_PERCENT}% to avoid visual exaggeration
         </div>
       </div>
-
-      {/* ================= NDVI HISTOGRAM ================= */}
-      {histogram.length > 0 && (
-        <div>
-          <h4 style={{ marginBottom: "0.5rem" }}>📊 NDVI Distribution</h4>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "4px",
-              alignItems: "flex-end",
-              height: "120px",
-            }}
-          >
-            {histogram.map((bin: any, i: number) => (
-              <div
-                key={i}
-                title={`NDVI ≈ ${bin.mean?.toFixed(2)}`}
-                style={{
-                  width: "12px",
-                  height: `${Math.max(2, bin.count / 10)}px`,
-                  background:
-                    bin.mean > 0.3
-                      ? "#27ae60"
-                      : bin.mean > 0.15
-                      ? "#f1c40f"
-                      : "#c0392b",
-                }}
-              />
-            ))}
-          </div>
-
-          <div
-            style={{
-              fontSize: "0.75rem",
-              color: "#555",
-              marginTop: "0.25rem",
-            }}
-          >
-            Red = Low NDVI | Yellow = Medium | Green = High
-          </div>
-        </div>
-      )}
     </section>
-  );
-}
-
-/* =========================================================
-   BAR COMPONENT
-========================================================= */
-function Bar({
-  label,
-  value,
-  max,
-  color,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
-}) {
-  const heightPercent = useMemo(
-    () => Math.round((value / max) * 100),
-    [value, max]
-  );
-
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div
-        style={{
-          width: "60px",
-          height: `${heightPercent}%`,
-          background: color,
-          borderRadius: "6px 6px 0 0",
-          transition: "height 0.4s ease",
-        }}
-      />
-      <div style={{ marginTop: "0.5rem", fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: "0.8rem", color: "#555" }}>
-        {value.toFixed(2)} ha
-      </div>
-    </div>
   );
 }
 
@@ -216,11 +178,11 @@ function StatBox({
       style={{
         padding: "1rem",
         borderRadius: "12px",
-        background: "#f9f9f9",
+        background: "#fafafa",
         border: "1px solid #ddd",
       }}
     >
-      <div style={{ fontSize: "0.8rem", color: "#555" }}>{label}</div>
+      <div style={{ fontSize: "0.8rem", color: "#666" }}>{label}</div>
       <div style={{ fontSize: "1.4rem", fontWeight: 700, color }}>
         {value}
       </div>
