@@ -88,6 +88,24 @@ export default function ResultsPanel({ result }: { result: any }) {
           color={percentageChange >= 0 ? "#27ae60" : "#c0392b"}
         />
       </div>
+      {/* ================= DRONE STATUS ================= */}
+      {result.drone_data?.error && (
+        <div
+          style={{
+            marginBottom: "1.25rem",
+            padding: "0.75rem 1rem",
+            background: "#fff3cd",
+            border: "1px solid #ffeeba",
+            borderRadius: "10px",
+            color: "#856404",
+            fontSize: "0.85rem",
+          }}
+        >
+          🚁 <strong>Drone analysis skipped:</strong>{" "}
+          {result.drone_data.error}
+        </div>
+      )}
+
 
       {/* ================= GAIN VS LOSS ================= */}
       <div>
@@ -288,3 +306,4 @@ function StatBox({
     </div>
   );
 }
+
