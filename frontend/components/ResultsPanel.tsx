@@ -37,6 +37,18 @@ export default function ResultsPanel({ result }: { result: any }) {
   );
 
   /* =======================================================
+     DRONE VS SATELLITE CALCS (SAFE)
+  ======================================================= */
+  const droneData = result.drone_data || null;
+  const satellitePresent = present_cover_ha;
+  const droneVegetation = droneData?.vegetation_area_ha ?? null;
+
+  const droneDiffPct =
+    droneVegetation !== null && satellitePresent > 0
+      ? ((droneVegetation - satellitePresent) / satellitePresent) * 100
+      : null;
+
+  /* =======================================================
      RENDER
   ======================================================= */
   return (
@@ -83,7 +95,6 @@ export default function ResultsPanel({ result }: { result: any }) {
           🌿 Vegetation Gain vs Loss
         </h4>
 
-        {/* Diverging Bar */}
         <div
           style={{
             position: "relative",
@@ -119,7 +130,7 @@ export default function ResultsPanel({ result }: { result: any }) {
           )}
 
           {/* Loss */}
-          {!isGain && (
+          {!isGain && change_ha !== 0 && (
             <div
               style={{
                 position: "absolute",
@@ -132,7 +143,6 @@ export default function ResultsPanel({ result }: { result: any }) {
           )}
         </div>
 
-        {/* Labels */}
         <div
           style={{
             marginTop: "0.5rem",
@@ -157,6 +167,95 @@ export default function ResultsPanel({ result }: { result: any }) {
           Bar scaled to ±{MAX_VISUAL_PERCENT}% to avoid visual exaggeration
         </div>
       </div>
+
+      {/* ================= DRONE ANALYSIS ================= */}
+      {droneData && (
+        <div style={{ marginTop: "2rem" }}>
+          <h4 style={{ marginBottom: "0.75rem" }}>🚁 Drone Analysis</h4>
+
+          <div
+            style={{
+              background: "#f4f4f4",
+              padding: "1rem",
+              borderRadius: "8px",
+              fontSize: "0.85rem",
+            }}
+          >
+            <div>Vegetation Area: {droneData.vegetation_area_ha} ha</div>
+            <div>Total Area: {droneData.total_area_ha} ha</div>
+            <div>
+              Vegetation %: {droneData.vegetation_percentage}%
+            </div>
+            <div>Mean NDVI: {droneData.mean_ndvi}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= DRONE vs SATELLITE ================= */}
+      {droneVegetation !== null && (
+        <div style={{ marginTop: "2rem" }}>
+          <h4 style={{ marginBottom: "0.75rem" }}>
+            🚁 Drone vs 🛰 Satellite
+          </h4>
+
+          <div style={{ marginBottom: "0.5rem" }}>
+            Difference:{" "}
+            <strong
+              style={{
+                color:
+                  droneDiffPct !== null && droneDiffPct >= 0
+                    ? "#27ae60"
+                    : "#c0392b",
+              }}
+            >
+              {droneDiffPct?.toFixed(2)}%
+            </strong>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: "2rem",
+              height: "140px",
+            }}
+          >
+            {[
+              {
+                label: "Satellite",
+                value: satellitePresent,
+                color: "#2980b9",
+              },
+              {
+                label: "Drone",
+                value: droneVegetation,
+                color: "#27ae60",
+              },
+            ].map((item) => (
+              <div key={item.label} style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    height: `${
+                      (item.value /
+                        Math.max(satellitePresent, droneVegetation, 1)) *
+                      120
+                    }px`,
+                    width: "50px",
+                    background: item.color,
+                    borderRadius: "6px",
+                  }}
+                />
+                <div style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: "0.75rem" }}>
+                  {item.value} ha
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
