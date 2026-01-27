@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import NDVIDiffMap from "./NDVIDiffMap";
 
 /* =========================================================
    TYPES
@@ -24,6 +25,9 @@ type DroneData = {
 type ResultPayload = {
   satellite_comparison?: SatelliteComparison;
   drone_data?: DroneData;
+  ndvi_difference?: {
+    tile_url: string;
+  };
 };
 
 type ResultsPanelProps = {
@@ -32,7 +36,7 @@ type ResultsPanelProps = {
 };
 
 /* =========================================================
-   RESULTS PANEL — PURE UI
+   RESULTS PANEL
 ========================================================= */
 export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
   if (!result?.satellite_comparison) return null;
@@ -46,28 +50,25 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
   } = result.satellite_comparison;
 
   /* =======================================================
-     CALCULATIONS
+     DERIVED VALUES
   ======================================================= */
+  const ndviTileUrl = result.ndvi_difference?.tile_url ?? null;
+
   const percentageChange = useMemo(() => {
     if (past_cover_ha <= 0) return 0;
     return ((present_cover_ha - past_cover_ha) / past_cover_ha) * 100;
   }, [past_cover_ha, present_cover_ha]);
 
-  const isGain = change_ha > 0;
+  const isGain = present_cover_ha > past_cover_ha;
+  const isLoss = present_cover_ha < past_cover_ha;
   const absChange = Math.abs(change_ha);
 
-  /* =======================================================
-     VISUAL SCALE
-  ======================================================= */
   const MAX_VISUAL_PERCENT = 5;
   const visualPercent = Math.min(
     Math.abs(percentageChange),
     MAX_VISUAL_PERCENT
   );
 
-  /* =======================================================
-     DRONE DATA (SAFE)
-  ======================================================= */
   const droneData = result.drone_data ?? null;
   const satellitePresent = present_cover_ha;
   const droneVegetation = droneData?.vegetation_area_ha ?? null;
@@ -77,10 +78,13 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
       ? ((droneVegetation - satellitePresent) / satellitePresent) * 100
       : null;
 
-  /* =======================================================
-     AOI METADATA
-  ======================================================= */
   const aoiPoints = aoi?.[0]?.length ?? 0;
+
+  const COLORS = {
+    gain: "#27ae60",
+    loss: "#c0392b",
+    neutral: "#7f8c8d",
+  };
 
   /* =======================================================
      RENDER
@@ -113,36 +117,21 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
         <StatBox
           label={`Past Vegetation (${past_year})`}
           value={`${past_cover_ha.toFixed(2)} ha`}
-          color="#27ae60"
+          color={COLORS.neutral}
         />
+
         <StatBox
           label={`Present Vegetation (${present_year})`}
           value={`${present_cover_ha.toFixed(2)} ha`}
-          color="#e67e22"
+          color={isGain ? COLORS.gain : isLoss ? COLORS.loss : COLORS.neutral}
         />
+
         <StatBox
           label="Percentage Change"
           value={`${percentageChange.toFixed(2)}%`}
-          color={percentageChange >= 0 ? "#27ae60" : "#c0392b"}
+          color={isGain ? COLORS.gain : isLoss ? COLORS.loss : COLORS.neutral}
         />
       </div>
-
-      {/* ================= DRONE STATUS ================= */}
-      {droneData?.error && (
-        <div
-          style={{
-            marginBottom: "1.25rem",
-            padding: "0.75rem 1rem",
-            background: "#fff3cd",
-            border: "1px solid #ffeeba",
-            borderRadius: "10px",
-            color: "#856404",
-            fontSize: "0.85rem",
-          }}
-        >
-          🚁 <strong>Drone analysis skipped:</strong> {droneData.error}
-        </div>
-      )}
 
       {/* ================= GAIN VS LOSS ================= */}
       <div>
@@ -177,25 +166,36 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
                 left: "50%",
                 height: "100%",
                 width: `${(visualPercent / MAX_VISUAL_PERCENT) * 50}%`,
-                background: "#27ae60",
+                background: COLORS.gain,
               }}
             />
           )}
 
-          {!isGain && change_ha !== 0 && (
+          {isLoss && (
             <div
               style={{
                 position: "absolute",
                 right: "50%",
                 height: "100%",
                 width: `${(visualPercent / MAX_VISUAL_PERCENT) * 50}%`,
-                background: "#c0392b",
+                background: COLORS.loss,
               }}
             />
           )}
         </div>
 
-        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+        <div
+          style={{
+            marginTop: "0.5rem",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            color: isGain
+              ? COLORS.gain
+              : isLoss
+              ? COLORS.loss
+              : COLORS.neutral,
+          }}
+        >
           {change_ha === 0
             ? "No detectable change"
             : isGain
@@ -238,14 +238,19 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
               style={{
                 color:
                   droneDiffPct !== null && droneDiffPct >= 0
-                    ? "#27ae60"
-                    : "#c0392b",
+                    ? COLORS.gain
+                    : COLORS.loss,
               }}
             >
               {droneDiffPct?.toFixed(2)}%
             </strong>
           </div>
         </div>
+      )}
+
+      {/* ================= NDVI DIFFERENCE MAP ================= */}
+      {ndviTileUrl && (
+        <NDVIDiffMap aoi={aoi} tileUrl={ndviTileUrl} />
       )}
     </section>
   );

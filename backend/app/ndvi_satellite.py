@@ -1,59 +1,56 @@
 import ee
 
-def compute_satellite_ndvi(
+def compute_ndvi_difference_tile(
     aoi_coords,
-    start_date,
-    end_date,
-    threshold=0.15,
+    past_start_date,
+    past_end_date,
+    present_start_date,
+    present_end_date,
     collection="COPERNICUS/S2_SR_HARMONIZED"
 ):
     """
-    Computes vegetation area (square meters) using NDVI.
-    RETURNS ONLY A NUMBER. NO TILE URL. NO MAPID.
+    Computes NDVI difference (present - past) and returns
+    an Earth Engine tile URL for visualization.
     """
 
     geometry = ee.Geometry.Polygon(aoi_coords)
 
-    # Sentinel-2 bands
     nir_band = "B8"
     red_band = "B4"
-    scale = 10
 
-    collection = (
-        ee.ImageCollection(collection)
-        .filterBounds(geometry)
-        .filterDate(start_date, end_date)
-        .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 40))
-        .select([nir_band, red_band])
-    )
+    def get_ndvi(start_date, end_date):
+        col = (
+            ee.ImageCollection(collection)
+            .filterBounds(geometry)
+            .filterDate(start_date, end_date)
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 40))
+            .select([nir_band, red_band])
+        )
 
-    # No images found
-    if collection.size().getInfo() == 0:
-        return 0.0
+        return col.median().normalizedDifference(
+            [nir_band, red_band]
+        ).rename("NDVI")
 
-    median_image = collection.median()
+    # NDVI for both periods
+    ndvi_past = get_ndvi(past_start_date, past_end_date)
+    ndvi_present = get_ndvi(present_start_date, present_end_date)
 
-    ndvi = median_image.normalizedDifference(
-        [nir_band, red_band]
-    ).rename("NDVI")
+    # NDVI Difference
+    ndvi_diff = ndvi_present.subtract(ndvi_past).clip(geometry)
 
-    vegetation_mask = ndvi.gt(threshold)
+    # Visualization parameters (scientifically sane)
+    vis_params = {
+        "min": -0.4,
+        "max": 0.4,
+        "palette": [
+            "#8e0000",  # severe loss
+            "#ff4d4d",  # moderate loss
+            "#ffffff",  # no change
+            "#7bed9f",  # moderate gain
+            "#1e8449",  # strong gain
+        ],
+    }
 
-    vegetation_area = vegetation_mask.multiply(
-        ee.Image.pixelArea()
-    )
+    map_id = ndvi_diff.getMapId(vis_params)
 
-    stats = vegetation_area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry,
-        scale=scale,
-        maxPixels=1e13,
-        bestEffort=True
-    )
-
-    area_sqm = stats.get("NDVI")
-
-    if area_sqm is None:
-        return 0.0
-
-    return ee.Number(area_sqm).getInfo()
+    return map_id["tile_fetcher"].url_format
