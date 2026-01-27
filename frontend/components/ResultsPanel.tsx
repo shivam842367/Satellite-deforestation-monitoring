@@ -3,16 +3,39 @@
 import { useMemo } from "react";
 
 /* =========================================================
-   RESULTS PANEL — NO MAPS, NO TILES
+   TYPES
 ========================================================= */
+type SatelliteComparison = {
+  past_year: number;
+  present_year: number;
+  past_cover_ha: number;
+  present_cover_ha: number;
+  change_ha: number;
+};
+
+type DroneData = {
+  vegetation_area_ha: number;
+  total_area_ha: number;
+  vegetation_percentage: number;
+  mean_ndvi: number;
+  error?: string;
+};
+
+type ResultPayload = {
+  satellite_comparison?: SatelliteComparison;
+  drone_data?: DroneData;
+};
+
 type ResultsPanelProps = {
-  result: any;
+  result: ResultPayload;
   aoi: number[][][];
 };
 
+/* =========================================================
+   RESULTS PANEL — PURE UI
+========================================================= */
 export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
-  if (!result || !result.satellite_comparison) return null;
-
+  if (!result?.satellite_comparison) return null;
 
   const {
     past_year,
@@ -26,7 +49,7 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
      CALCULATIONS
   ======================================================= */
   const percentageChange = useMemo(() => {
-    if (!past_cover_ha || past_cover_ha === 0) return 0;
+    if (past_cover_ha <= 0) return 0;
     return ((present_cover_ha - past_cover_ha) / past_cover_ha) * 100;
   }, [past_cover_ha, present_cover_ha]);
 
@@ -34,18 +57,18 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
   const absChange = Math.abs(change_ha);
 
   /* =======================================================
-     VISUAL SCALE (CAP TO AVOID EXAGGERATION)
+     VISUAL SCALE
   ======================================================= */
-  const MAX_VISUAL_PERCENT = 5; // ±5% fills bar completely
+  const MAX_VISUAL_PERCENT = 5;
   const visualPercent = Math.min(
     Math.abs(percentageChange),
     MAX_VISUAL_PERCENT
   );
 
   /* =======================================================
-     DRONE VS SATELLITE CALCS (SAFE)
+     DRONE DATA (SAFE)
   ======================================================= */
-  const droneData = result.drone_data || null;
+  const droneData = result.drone_data ?? null;
   const satellitePresent = present_cover_ha;
   const droneVegetation = droneData?.vegetation_area_ha ?? null;
 
@@ -53,6 +76,11 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
     droneVegetation !== null && satellitePresent > 0
       ? ((droneVegetation - satellitePresent) / satellitePresent) * 100
       : null;
+
+  /* =======================================================
+     AOI METADATA
+  ======================================================= */
+  const aoiPoints = aoi?.[0]?.length ?? 0;
 
   /* =======================================================
      RENDER
@@ -68,6 +96,10 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
       }}
     >
       <h2 style={{ marginBottom: "1.25rem" }}>📊 Analysis Results</h2>
+
+      <p style={{ fontSize: "0.8rem", color: "#666" }}>
+        AOI Points: {aoiPoints}
+      </p>
 
       {/* ================= STATS ================= */}
       <div
@@ -94,8 +126,9 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
           color={percentageChange >= 0 ? "#27ae60" : "#c0392b"}
         />
       </div>
+
       {/* ================= DRONE STATUS ================= */}
-      {result.drone_data?.error && (
+      {droneData?.error && (
         <div
           style={{
             marginBottom: "1.25rem",
@@ -107,11 +140,9 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
             fontSize: "0.85rem",
           }}
         >
-          🚁 <strong>Drone analysis skipped:</strong>{" "}
-          {result.drone_data.error}
+          🚁 <strong>Drone analysis skipped:</strong> {droneData.error}
         </div>
       )}
-
 
       {/* ================= GAIN VS LOSS ================= */}
       <div>
@@ -128,7 +159,6 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
             overflow: "hidden",
           }}
         >
-          {/* Center Line */}
           <div
             style={{
               position: "absolute",
@@ -140,7 +170,6 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
             }}
           />
 
-          {/* Gain */}
           {isGain && (
             <div
               style={{
@@ -153,7 +182,6 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
             />
           )}
 
-          {/* Loss */}
           {!isGain && change_ha !== 0 && (
             <div
               style={{
@@ -167,28 +195,12 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
           )}
         </div>
 
-        <div
-          style={{
-            marginTop: "0.5rem",
-            fontSize: "0.85rem",
-            color: "#555",
-          }}
-        >
+        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
           {change_ha === 0
             ? "No detectable change"
             : isGain
             ? `Gain of ${absChange.toFixed(2)} ha`
             : `Loss of ${absChange.toFixed(2)} ha`}
-        </div>
-
-        <div
-          style={{
-            marginTop: "0.25rem",
-            fontSize: "0.75rem",
-            color: "#888",
-          }}
-        >
-          Bar scaled to ±{MAX_VISUAL_PERCENT}% to avoid visual exaggeration
         </div>
       </div>
 
@@ -207,9 +219,7 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
           >
             <div>Vegetation Area: {droneData.vegetation_area_ha} ha</div>
             <div>Total Area: {droneData.total_area_ha} ha</div>
-            <div>
-              Vegetation %: {droneData.vegetation_percentage}%
-            </div>
+            <div>Vegetation %: {droneData.vegetation_percentage}%</div>
             <div>Mean NDVI: {droneData.mean_ndvi}</div>
           </div>
         </div>
@@ -222,7 +232,7 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
             🚁 Drone vs 🛰 Satellite
           </h4>
 
-          <div style={{ marginBottom: "0.5rem" }}>
+          <div>
             Difference:{" "}
             <strong
               style={{
@@ -234,49 +244,6 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
             >
               {droneDiffPct?.toFixed(2)}%
             </strong>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: "2rem",
-              height: "140px",
-            }}
-          >
-            {[
-              {
-                label: "Satellite",
-                value: satellitePresent,
-                color: "#2980b9",
-              },
-              {
-                label: "Drone",
-                value: droneVegetation,
-                color: "#27ae60",
-              },
-            ].map((item) => (
-              <div key={item.label} style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    height: `${
-                      (item.value /
-                        Math.max(satellitePresent, droneVegetation, 1)) *
-                      120
-                    }px`,
-                    width: "50px",
-                    background: item.color,
-                    borderRadius: "6px",
-                  }}
-                />
-                <div style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-                  {item.label}
-                </div>
-                <div style={{ fontSize: "0.75rem" }}>
-                  {item.value} ha
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -312,4 +279,3 @@ function StatBox({
     </div>
   );
 }
-
