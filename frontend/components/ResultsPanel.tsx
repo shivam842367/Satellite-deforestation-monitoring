@@ -123,13 +123,25 @@ export default function ResultsPanel({ result, aoi }: ResultsPanelProps) {
         <StatBox
           label={`Present Vegetation (${present_year})`}
           value={`${present_cover_ha.toFixed(2)} ha`}
-          color={isGain ? COLORS.gain : isLoss ? COLORS.loss : COLORS.neutral}
+          color={
+            isGain
+              ? COLORS.gain
+              : isLoss
+              ? COLORS.loss
+              : COLORS.neutral
+          }
         />
 
         <StatBox
           label="Percentage Change"
           value={`${percentageChange.toFixed(2)}%`}
-          color={isGain ? COLORS.gain : isLoss ? COLORS.loss : COLORS.neutral}
+          color={
+            isGain
+              ? COLORS.gain
+              : isLoss
+              ? COLORS.loss
+              : COLORS.neutral
+          }
         />
       </div>
 
