@@ -4,12 +4,10 @@ import { useState } from "react";
 import MapAOI from "../components/MapAOI";
 import ResultsPanel from "@/components/ResultsPanel";
 
-
 /* =========================================================
    MAIN PAGE COMPONENT
 ========================================================= */
 export default function DeforestationMonitor() {
-
   /* =========================================================
      STATE: AOI SELECTION
   ========================================================= */
@@ -75,7 +73,6 @@ export default function DeforestationMonitor() {
       setUploadStatus(
         `Uploaded: ${data.filename} (${data.size_mb} MB)`
       );
-
     } catch (err: any) {
       setUploadStatus(`Upload failed: ${err.message}`);
     }
@@ -120,7 +117,6 @@ export default function DeforestationMonitor() {
       }
 
       const { job_id } = await submitResponse.json();
-
       setProgress(`Job submitted (ID: ${job_id.slice(0, 8)}…)`);
 
       const pollInterval = setInterval(async () => {
@@ -141,7 +137,6 @@ export default function DeforestationMonitor() {
           setProgress("Processing satellite and drone data...");
         }
       }, 3000);
-
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -154,7 +149,6 @@ export default function DeforestationMonitor() {
   ========================================================= */
   return (
     <div style={containerStyle}>
-
       {/* ================= HEADER ================= */}
       <h1 style={{ marginBottom: "0.5rem" }}>
         🛰️ Drone-Based Deforestation Monitor
@@ -165,21 +159,15 @@ export default function DeforestationMonitor() {
       </p>
 
       {/* ================= STEP 1 ================= */}
-      <section className="card fade-in" style={sectionStyle}>
-        <h2 className="section-title">Step 1: Select Area of Interest</h2>
+      <section style={sectionStyle}>
+        <h2>Step 1: Select Area of Interest</h2>
 
         <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
-          <button onClick={() => setAOIMode("map")}>
-            🗺️ Draw on Map
-          </button>
-          <button onClick={() => setAOIMode("geojson")}>
-            🧾 Paste GeoJSON
-          </button>
+          <button onClick={() => setAOIMode("map")}>🗺️ Draw on Map</button>
+          <button onClick={() => setAOIMode("geojson")}>🧾 Paste GeoJSON</button>
         </div>
 
-        {aoiMode === "map" && (
-          <MapAOI onAOISelect={setAOI} />
-        )}
+        {aoiMode === "map" && <MapAOI onAOISelect={setAOI} />}
 
         {aoiMode === "geojson" && (
           <>
@@ -257,7 +245,9 @@ export default function DeforestationMonitor() {
             onChange={(e) => setPastYear(Number(e.target.value))}
           >
             {[2010, 2012, 2014, 2016, 2018, 2020].map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
           </select>
 
@@ -266,7 +256,9 @@ export default function DeforestationMonitor() {
             onChange={(e) => setPresentYear(Number(e.target.value))}
           >
             {[2020, 2021, 2022, 2023, 2024].map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
           </select>
         </div>
@@ -289,22 +281,18 @@ export default function DeforestationMonitor() {
         )}
 
         {error && (
-          <div style={{ marginTop: "1rem", color: "red" }}>
-            {error}
-          </div>
+          <div style={{ marginTop: "1rem", color: "red" }}>{error}</div>
         )}
       </section>
 
       {/* ================= RESULTS ================= */}
-      {result && <ResultsPanel result={result} aoi={aoi} />
-}
-
+      {result && aoi && <ResultsPanel result={result} aoi={aoi} />}
     </div>
   );
 }
 
 /* =========================================================
-   STYLES (UNCHANGED)
+   STYLES
 ========================================================= */
 const containerStyle: React.CSSProperties = {
   padding: "2rem",
